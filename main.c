@@ -10,7 +10,7 @@
 const char* irc_server_hostname = "irc.chat.twitch.tv";
 const char* bot_nickname = "futuresmt";
 const char* channel_name = "#futuresmt";
-const char* robot_emoji = "\xf0\x9f\xa4\x96";
+const char* robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 
 void send_message(FILE *write_stream, char *msg) {
     fprintf(write_stream, "PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
