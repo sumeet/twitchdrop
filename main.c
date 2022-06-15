@@ -1,10 +1,10 @@
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
 #include "tokens.h"
 
 const char* irc_server_hostname = "irc.chat.twitch.tv";
@@ -23,8 +23,6 @@ int main(void) {
         exit(1);
     }
 
-    // TODO XXX WARNING: this seems to be leaking memory, according to valgrind
-    // freehostent doesn't seem to work, and neither does free
     struct hostent *host = gethostbyname(irc_server_hostname);
     if (host == NULL) {
         fprintf(stderr, "unknown host: %s\n", irc_server_hostname);
@@ -41,15 +39,29 @@ int main(void) {
         exit(1);
     }
 
-    // XXX TODO: check resource allocation, see if we're leaking
-    FILE *f = fdopen(dup(sock), "w");
-    fprintf(f, "PASS %s\n", token);
-    fprintf(f, "NICK %s\n", bot_nickname);
-    fflush(f);
-    fprintf(f, "JOIN %s\n", channel_name);
-    send_message(f, "hello from C");
+    FILE *write_stream = fdopen(dup(sock), "w");
+    fprintf(write_stream, "PASS %s\n", token);
+    fprintf(write_stream, "NICK %s\n", bot_nickname);
+    fprintf(write_stream, "JOIN %s\n", channel_name);
+    send_message(write_stream, "hello from C");
+    fflush(write_stream);
 
-    fclose(f);
+
+    FILE *read_stream = fdopen(dup(sock), "r");
+    size_t read_buffer_size = 2048;
+    char *read_buffer = malloc(read_buffer_size);
+    while (true) {
+        printf("reading from the socket\n");
+        fflush(stdout);
+        if (getline(&read_buffer, &read_buffer_size, read_stream) < 0) {
+            fprintf(stderr, "unknown to read line from socket: %m\n");
+            break;
+        }
+        printf("received IRC message: %s", read_buffer);
+    }
+
+    fclose(write_stream);
+    fclose(read_stream);
     close(sock);
 }
 
