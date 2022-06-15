@@ -12,8 +12,15 @@ const char* bot_nickname = "futuresmt";
 const char* channel_name = "#futuresmt";
 const char* robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 
+
+#define MAX_CURRENT_PROJECT_SIZE 2048
+char current_project[MAX_CURRENT_PROJECT_SIZE] = "Writing a Twitch bot in Pure C -- https://github.com/sumeet/twitchdrop";
+
 void send_message(FILE *write_stream, char *msg) {
+    // TODO: probably extract this into a socket writing function
+    printf("> PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
     fprintf(write_stream, "PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
+    fflush(write_stream);
 }
 
 int main(void) {
@@ -50,18 +57,31 @@ int main(void) {
     FILE *read_stream = fdopen(dup(sock), "r");
     size_t read_buffer_size = 2048;
     char *read_buffer = malloc(read_buffer_size);
+
+    char *target = malloc(1024);
+    char *message = malloc(1024);
+
     while (true) {
-        printf("reading from the socket\n");
+        printf("< ");
         fflush(stdout);
+
         if (getline(&read_buffer, &read_buffer_size, read_stream) < 0) {
             fprintf(stderr, "unknown to read line from socket: %m\n");
             break;
         }
-        printf("received IRC message: %s", read_buffer);
+
+        printf("%s", read_buffer);
+        int scanned = sscanf(read_buffer, ":%*s PRIVMSG %s :%s\n", target, message);
+        if (scanned == 2) {
+            if (strcmp(message, "!project") == 0 || strcmp(message, "!today") == 0) {
+                send_message(write_stream, current_project);
+            }
+        }
     }
 
     fclose(write_stream);
     fclose(read_stream);
     close(sock);
+    return 0;
 }
 
