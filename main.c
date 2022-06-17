@@ -21,6 +21,7 @@ void w(FILE *file, const char *format, ...) {
     va_list args;
     va_start(args, format);
     vfprintf(file, format, args);
+    fflush(file);
     va_end(args);
 }
 
