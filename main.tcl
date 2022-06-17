@@ -1,3 +1,2 @@
-set asdf [1+1]
-set bcdf "another expression"
-return "hello ${asdf} tcl file"
+puts "the script is being run"
+send_message "hello from Tcl!"

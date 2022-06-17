@@ -17,18 +17,34 @@ const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 #define MAX_CURRENT_PROJECT_SIZE 2048
 char current_project[MAX_CURRENT_PROJECT_SIZE] = "Tcl | Writing a Twitch bot in Pure C -- https://github.com/sumeet/twitchdrop";
 
-Tcl_Interp *init_tcl() {
+Tcl_Interp *init_tcl(FILE *write_stream) {
     Tcl_Interp *interp = Tcl_CreateInterp();
     if (Tcl_Init(interp) != TCL_OK) {
         fprintf(stderr, "error initializing Tcl: %s\n", Tcl_GetStringResult(interp));
         exit(1);
     }
 
-    // load Tcl commands
-    char *to_eval = "return hello";
-    Tcl_Eval(interp, to_eval);
+    int tcl_send_message(void *client_data, Tcl_Interp *interp, int argc, const char *argv[]) {
+        (void)client_data;
+
+        if (argc != 2) {
+            Tcl_SetResult(interp, "wrong number of arguments", TCL_STATIC);
+            return TCL_ERROR;
+        }
+
+        send_message(write_stream, (char *) argv[1]);
+        Tcl_SetResult(interp, "", TCL_STATIC);
+        return TCL_OK;
+    }
+
+    Tcl_CreateCommand(interp,
+                      "send_message",
+                      tcl_send_message,
+                      NULL,
+                      NULL);
+
     Tcl_EvalFile(interp, "main.tcl");
-    printf("result of |%s|: %s\n", to_eval, Tcl_GetStringResult(interp));
+    printf("Loaded main.tcl: |%s|\n", Tcl_GetStringResult(interp));
 
     return interp;
 }
@@ -54,9 +70,6 @@ int main(void) {
         exit(1);
     }
 
-    // initialize Tcl interpreter
-    Tcl_Interp *interp = init_tcl();
-
     struct hostent *host = gethostbyname(irc_server_hostname);
     if (host == NULL) {
         fprintf(stderr, "unknown host: %s\n", irc_server_hostname);
@@ -75,12 +88,6 @@ int main(void) {
 
     FILE *write_stream = fdopen(dup(sock), "w");
 
-    Tcl_CreateCommand(interp,
-                      "send_message",
-                      (Tcl_CmdProc *) send_message,
-                      write_stream,
-                      NULL);
-
     // authenticate to twitch
     w(write_stream, "PASS %s\n", token);
     w(write_stream, "NICK %s\n", bot_nickname);
@@ -88,6 +95,8 @@ int main(void) {
     // join the channel (configured by channel_name)
     w(write_stream, "JOIN %s\n", channel_name);
     fflush(write_stream);
+
+    init_tcl(write_stream);
 
     FILE *read_stream = fdopen(dup(sock), "r");
     size_t read_buffer_size = 2048;
