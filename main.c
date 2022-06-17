@@ -7,10 +7,10 @@
 #include <stdbool.h>
 #include "tokens.h"
 
-const char* irc_server_hostname = "irc.chat.twitch.tv";
-const char* bot_nickname = "futuresmt";
-const char* channel_name = "#futuresmt";
-const char* robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
+const char *irc_server_hostname = "irc.chat.twitch.tv";
+const char *bot_nickname = "futuresmt";
+const char *channel_name = "#futuresmt";
+const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 
 
 #define MAX_CURRENT_PROJECT_SIZE 2048
@@ -47,17 +47,21 @@ int main(void) {
     }
 
     FILE *write_stream = fdopen(dup(sock), "w");
+
+    // authenticate to twitch
     fprintf(write_stream, "PASS %s\n", token);
     fprintf(write_stream, "NICK %s\n", bot_nickname);
+
+    // join the channel (configured by channel_name)
     fprintf(write_stream, "JOIN %s\n", channel_name);
+
+    // send the welcome message
     send_message(write_stream, "hello from C");
     fflush(write_stream);
-
 
     FILE *read_stream = fdopen(dup(sock), "r");
     size_t read_buffer_size = 2048;
     char *read_buffer = malloc(read_buffer_size);
-
     char *target = malloc(1024);
     char *message = malloc(1024);
 
@@ -65,6 +69,7 @@ int main(void) {
         printf("< ");
         fflush(stdout);
 
+        // read line delineated messages from the IRC server
         if (getline(&read_buffer, &read_buffer_size, read_stream) < 0) {
             fprintf(stderr, "unknown to read line from socket: %m\n");
             break;
