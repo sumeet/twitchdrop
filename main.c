@@ -17,6 +17,22 @@ const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 #define MAX_CURRENT_PROJECT_SIZE 2048
 char current_project[MAX_CURRENT_PROJECT_SIZE] = "Tcl | Writing a Twitch bot in Pure C -- https://github.com/sumeet/twitchdrop";
 
+Tcl_Interp *init_tcl() {
+    Tcl_Interp *interp = Tcl_CreateInterp();
+    if (Tcl_Init(interp) != TCL_OK) {
+        fprintf(stderr, "error initializing Tcl: %s\n", Tcl_GetStringResult(interp));
+        exit(1);
+    }
+
+    // load Tcl commands
+    char *to_eval = "return hello";
+    Tcl_Eval(interp, to_eval);
+    Tcl_EvalFile(interp, "main.tcl");
+    printf("result of |%s|: %s\n", to_eval, Tcl_GetStringResult(interp));
+
+    return interp;
+}
+
 void w(FILE *file, const char *format, ...) {
     va_list args;
     va_start(args, format);
@@ -39,17 +55,7 @@ int main(void) {
     }
 
     // initialize Tcl interpreter
-    Tcl_Interp *interp = Tcl_CreateInterp();
-    if (Tcl_Init(interp) != TCL_OK) {
-        fprintf(stderr, "error initializing Tcl: %s\n", Tcl_GetStringResult(interp));
-        exit(1);
-    }
-
-    // load Tcl commands
-    char *to_eval = "return hello";
-    Tcl_Eval(interp, to_eval);
-    printf("result of |%s|: %s\n", to_eval, Tcl_GetStringResult(interp));
-
+    Tcl_Interp *interp = init_tcl();
 
     struct hostent *host = gethostbyname(irc_server_hostname);
     if (host == NULL) {
@@ -68,6 +74,12 @@ int main(void) {
     }
 
     FILE *write_stream = fdopen(dup(sock), "w");
+
+    Tcl_CreateCommand(interp,
+                      "send_message",
+                      (Tcl_CmdProc *) send_message,
+                      write_stream,
+                      NULL);
 
     // authenticate to twitch
     w(write_stream, "PASS %s\n", token);
