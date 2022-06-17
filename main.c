@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include "tokens.h"
+#include <tcl.h>
 
 const char *irc_server_hostname = "irc.chat.twitch.tv";
 const char *bot_nickname = "futuresmt";
@@ -14,21 +15,40 @@ const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 
 
 #define MAX_CURRENT_PROJECT_SIZE 2048
-char current_project[MAX_CURRENT_PROJECT_SIZE] = "Writing a Twitch bot in Pure C -- https://github.com/sumeet/twitchdrop";
+char current_project[MAX_CURRENT_PROJECT_SIZE] = "Tcl | Writing a Twitch bot in Pure C -- https://github.com/sumeet/twitchdrop";
+
+void w(FILE *file, const char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(file, format, args);
+    va_end(args);
+}
 
 void send_message(FILE *write_stream, char *msg) {
     // TODO: probably extract this into a socket writing function
     printf("> PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
-    fprintf(write_stream, "PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
-    fflush(write_stream);
+    w(write_stream, "PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
 }
 
 int main(void) {
     int sock = socket(AF_INET, SOCK_STREAM, PF_UNSPEC);
     if (sock < 0) {
-        fprintf(stderr, "error creating socket: %m\n");
+        w(stderr, "error creating socket: %m\n");
         exit(1);
     }
+
+    // initialize Tcl interpreter
+    Tcl_Interp *interp = Tcl_CreateInterp();
+    if (Tcl_Init(interp) != TCL_OK) {
+        fprintf(stderr, "error initializing Tcl: %s\n", Tcl_GetStringResult(interp));
+        exit(1);
+    }
+
+    // load Tcl commands
+    char *to_eval = "return hello";
+    Tcl_Eval(interp, to_eval);
+    printf("result of |%s|: %s\n", to_eval, Tcl_GetStringResult(interp));
+
 
     struct hostent *host = gethostbyname(irc_server_hostname);
     if (host == NULL) {
@@ -49,14 +69,11 @@ int main(void) {
     FILE *write_stream = fdopen(dup(sock), "w");
 
     // authenticate to twitch
-    fprintf(write_stream, "PASS %s\n", token);
-    fprintf(write_stream, "NICK %s\n", bot_nickname);
+    w(write_stream, "PASS %s\n", token);
+    w(write_stream, "NICK %s\n", bot_nickname);
 
     // join the channel (configured by channel_name)
-    fprintf(write_stream, "JOIN %s\n", channel_name);
-
-    // send the welcome message
-    send_message(write_stream, "hello from C");
+    w(write_stream, "JOIN %s\n", channel_name);
     fflush(write_stream);
 
     FILE *read_stream = fdopen(dup(sock), "r");

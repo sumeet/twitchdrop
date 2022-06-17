@@ -1,4 +1,4 @@
 twitchdrop: main.c
 	mkdir -p build
-	gcc -Wextra -Wall -g -o build/twitchdrop main.c
+	gcc -Wextra -Wall -g -ltcl -o build/twitchdrop main.c
 
