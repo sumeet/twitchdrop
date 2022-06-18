@@ -4,50 +4,19 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
+#include <ctype.h>
 #include <stdbool.h>
 #include "tokens.h"
 #include <tcl.h>
 
 const char *irc_server_hostname = "irc.chat.twitch.tv";
-const char *bot_nickname = "futuresmt";
-const char *channel_name = "#futuresmt";
+const char *bot_nickname = "sumcademy";
+const char *channel_name = "#sumcademy";
 const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 
 
 #define MAX_CURRENT_PROJECT_SIZE 2048
 char current_project[MAX_CURRENT_PROJECT_SIZE] = "Tcl | Writing a Twitch bot in Pure C -- https://github.com/sumeet/twitchdrop";
-
-Tcl_Interp *init_tcl(FILE *write_stream) {
-    Tcl_Interp *interp = Tcl_CreateInterp();
-    if (Tcl_Init(interp) != TCL_OK) {
-        fprintf(stderr, "error initializing Tcl: %s\n", Tcl_GetStringResult(interp));
-        exit(1);
-    }
-
-    int tcl_send_message(void *client_data, Tcl_Interp *interp, int argc, const char *argv[]) {
-        (void)client_data;
-
-        if (argc != 2) {
-            Tcl_SetResult(interp, "wrong number of arguments", TCL_STATIC);
-            return TCL_ERROR;
-        }
-
-        send_message(write_stream, (char *) argv[1]);
-        Tcl_SetResult(interp, "", TCL_STATIC);
-        return TCL_OK;
-    }
-
-    Tcl_CreateCommand(interp,
-                      "send_message",
-                      tcl_send_message,
-                      NULL,
-                      NULL);
-
-    Tcl_EvalFile(interp, "main.tcl");
-    printf("Loaded main.tcl: |%s|\n", Tcl_GetStringResult(interp));
-
-    return interp;
-}
 
 void w(FILE *file, const char *format, ...) {
     va_list args;
@@ -61,6 +30,36 @@ void send_message(FILE *write_stream, char *msg) {
     // TODO: probably extract this into a socket writing function
     printf("> PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
     w(write_stream, "PRIVMSG %s :%s %s\n", channel_name, robot_emoji, msg);
+}
+
+int tcl_send_message(FILE *write_stream, Tcl_Interp *interp, int argc, const char *argv[]) {
+    if (argc != 2) {
+        Tcl_SetResult(interp, "wrong number of arguments", TCL_STATIC);
+        return TCL_ERROR;
+    }
+    send_message(write_stream, (char *) argv[1]);
+    Tcl_SetResult(interp, "", TCL_STATIC);
+    return TCL_OK;
+}
+
+
+Tcl_Interp *init_tcl(FILE *write_stream) {
+    Tcl_Interp *interp = Tcl_CreateInterp();
+    if (Tcl_Init(interp) != TCL_OK) {
+        fprintf(stderr, "error initializing Tcl: %s\n", Tcl_GetStringResult(interp));
+        exit(1);
+    }
+
+    Tcl_CreateCommand(interp,
+                      "send_message",
+                      (void *) tcl_send_message,
+                      write_stream,
+                      NULL);
+
+    Tcl_EvalFile(interp, "main.tcl");
+    printf("Loaded main.tcl: |%s|\n", Tcl_GetStringResult(interp));
+
+    return interp;
 }
 
 int main(void) {
@@ -96,7 +95,7 @@ int main(void) {
     w(write_stream, "JOIN %s\n", channel_name);
     fflush(write_stream);
 
-    init_tcl(write_stream);
+    Tcl_Interp *interp = init_tcl(write_stream);
 
     FILE *read_stream = fdopen(dup(sock), "r");
     size_t read_buffer_size = 2048;
@@ -117,6 +116,15 @@ int main(void) {
         printf("%s", read_buffer);
         int scanned = sscanf(read_buffer, ":%*s PRIVMSG %s :%s\n", target, message);
         if (scanned == 2) {
+            // try calling into tcl
+            char *first_word = strtok(message, " ");
+            if (first_word[0] == '!' && first_word[1] != 0) {
+                Tcl_Eval(interp, first_word);
+                printf(">>> %s\n", first_word);
+                printf("%s\n", Tcl_GetStringResult(interp));
+            }
+
+            // hardcoded !project command
             if (strcmp(message, "!project") == 0 || strcmp(message, "!today") == 0) {
                 send_message(write_stream, current_project);
             }
