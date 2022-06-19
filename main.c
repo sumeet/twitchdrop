@@ -4,7 +4,6 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <string.h>
-#include <ctype.h>
 #include <stdbool.h>
 #include "tokens.h"
 #include <tcl.h>
@@ -13,6 +12,9 @@ const char *irc_server_hostname = "irc.chat.twitch.tv";
 const char *bot_nickname = "sumcademy";
 const char *channel_name = "#sumcademy";
 const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
+
+// TODO: respond to PINGs
+// TODO: how to fix `unknown to read line from socket: Illegal seek` happening on startup
 
 
 #define MAX_CURRENT_PROJECT_SIZE 2048
@@ -114,22 +116,42 @@ int main(void) {
         }
 
         printf("%s", read_buffer);
-        int scanned = sscanf(read_buffer, ":%*s PRIVMSG %s :%s\n", target, message);
+        int scanned = sscanf(read_buffer, ":%*s PRIVMSG %s :%[^\r\n]\r\n", target, message);
         if (scanned == 2) {
-            // try calling into tcl
             char *first_word = strtok(message, " ");
-            if (first_word[0] == '!' && first_word[1] != 0) {
-                Tcl_Eval(interp, first_word);
+
+            // we'll try to call the Tcl command "!project"
+            if (strcmp(first_word, "!project") == 0 || strcmp(first_word, "!today") == 0) {
+                send_message(write_stream, current_project);
+            } else if (first_word[0] == '!' && first_word[1] != 0) {
+                // if we detect a message that starts with !, we're going to try and call a Tcl
+                // command with that corresponding name. for example, if someone types !project,
+                int objc = 1;
+                // XXX (possible memory leak): do we need to call Tcl_DecrRefCount every time we call Tcl_NewStringObj,
+                // when we're done?
+                Tcl_Obj *objv[1024] = {
+                        Tcl_NewStringObj(first_word, -1),
+                };
+
+                while (true) {
+                    char *next = strtok(NULL, " ");
+                    if (next == NULL) {
+                        break;
+                    }
+                    objv[objc++] = Tcl_NewStringObj(next, -1);
+                }
+                Tcl_EvalObjv(interp, objc, objv, 0);
+
                 printf(">>> %s\n", first_word);
-                printf("%s\n", Tcl_GetStringResult(interp));
+                printf("result: |%s|\n", Tcl_GetStringResult(interp));
             }
 
-            // hardcoded !project command
-            if (strcmp(message, "!project") == 0 || strcmp(message, "!today") == 0) {
-                send_message(write_stream, current_project);
-            }
         }
     }
+
+    free(read_buffer);
+    free(target);
+    free(message);
 
     fclose(write_stream);
     fclose(read_stream);
