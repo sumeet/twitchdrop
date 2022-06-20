@@ -145,7 +145,6 @@ int main(void) {
                 printf(">>> %s\n", first_word);
                 printf("result: |%s|\n", Tcl_GetStringResult(interp));
             }
-
         }
     }
 
