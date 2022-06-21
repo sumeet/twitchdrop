@@ -15,6 +15,7 @@ const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 
 // TODO: respond to PINGs
 // TODO: how to fix `unknown to read line from socket: Illegal seek` happening on startup
+// TODO: how to fix `unknown to read line from socket: Connection reset by peer`
 
 
 #define MAX_CURRENT_PROJECT_SIZE 2048
@@ -127,23 +128,26 @@ int main(void) {
                 // if we detect a message that starts with !, we're going to try and call a Tcl
                 // command with that corresponding name. for example, if someone types !project,
                 int objc = 1;
-                // XXX (possible memory leak): do we need to call Tcl_DecrRefCount every time we call Tcl_NewStringObj,
-                // when we're done?
-                Tcl_Obj *objv[1024] = {
-                        Tcl_NewStringObj(first_word, -1),
-                };
+
+                Tcl_Obj* obj = Tcl_NewStringObj(first_word, -1);
+                Tcl_IncrRefCount(obj);
+                Tcl_Obj *objv[1024] = {obj};
 
                 while (true) {
                     char *next = strtok(NULL, " ");
                     if (next == NULL) {
                         break;
                     }
-                    objv[objc++] = Tcl_NewStringObj(next, -1);
+                    obj = Tcl_NewStringObj(next, -1);
+                    Tcl_IncrRefCount(obj);
+                    objv[objc++] = obj;
                 }
                 Tcl_EvalObjv(interp, objc, objv, 0);
 
+                for (int i = 0; i < objc; i++) Tcl_DecrRefCount(objv[i]);
+
                 printf(">>> %s\n", first_word);
-                printf("result: |%s|\n", Tcl_GetStringResult(interp));
+                send_message(write_stream, (char *) Tcl_GetStringResult(interp));
             }
         }
     }
