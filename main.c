@@ -18,9 +18,6 @@ const char *robot_emoji = "\xf0\x9f\xa4\x96"; // 🤖
 // TODO: how to fix `unknown to read line from socket: Connection reset by peer`
 
 
-#define MAX_CURRENT_PROJECT_SIZE 2048
-char current_project[MAX_CURRENT_PROJECT_SIZE] = "Tcl | Writing a Twitch bot in Pure C -- https://github.com/sumeet/twitchdrop";
-
 void w(FILE *file, const char *format, ...) {
     va_list args;
     va_start(args, format);
@@ -120,11 +117,7 @@ int main(void) {
         int scanned = sscanf(read_buffer, ":%*s PRIVMSG %s :%[^\r\n]\r\n", target, message);
         if (scanned == 2) {
             char *first_word = strtok(message, " ");
-
-            // we'll try to call the Tcl command "!project"
-            if (strcmp(first_word, "!project") == 0 || strcmp(first_word, "!today") == 0) {
-                send_message(write_stream, current_project);
-            } else if (first_word[0] == '!' && first_word[1] != 0) {
+            if (first_word[0] == '!' && first_word[1] != 0) {
                 // if we detect a message that starts with !, we're going to try and call a Tcl
                 // command with that corresponding name. for example, if someone types !project,
                 int objc = 1;
