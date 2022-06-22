@@ -62,6 +62,27 @@ Tcl_Interp *init_tcl(FILE *write_stream) {
     return interp;
 }
 
+// TODO: make sure not to overflow objv
+int chop_string_to_tcl_objs(char *string, char delim, Tcl_Obj **objv) {
+    char strtok_delim[2] = {delim, 0};
+    char *first_word = strtok(string, strtok_delim);
+    Tcl_Obj* obj = Tcl_NewStringObj(first_word, -1);
+    int objc = 0;
+    objv[objc++] = obj;
+    Tcl_IncrRefCount(obj);
+    while (true) {
+        char *next = strtok(NULL, strtok_delim);
+        if (next == NULL) {
+            break;
+        }
+        obj = Tcl_NewStringObj(next, -1);
+        Tcl_IncrRefCount(obj);
+        objv[objc++] = obj;
+    }
+    return objc;
+
+}
+
 int main(void) {
     int sock = socket(AF_INET, SOCK_STREAM, PF_UNSPEC);
     if (sock < 0) {
@@ -115,41 +136,26 @@ int main(void) {
 
         printf("%s", read_buffer);
         int scanned = sscanf(read_buffer, ":%*s PRIVMSG %s :%[^\r\n]\r\n", target, message);
-        if (scanned == 2) {
-            char *first_word = strtok(message, " ");
-            if (first_word[0] == '!' && first_word[1] != 0) {
-                printf(">>> %s\n", first_word);
+        // if we detect a message that starts with !, we're going to try and call a Tcl
+        // command with that corresponding name. for example, if someone types !project,
+        if (scanned == 2 && message[0] == '!') {
+            printf(">>> %s\n", message);
 
-                // if we detect a message that starts with !, we're going to try and call a Tcl
-                // command with that corresponding name. for example, if someone types !project,
-                int objc = 1;
+            Tcl_Obj *objv[1024];
+            int objc = chop_string_to_tcl_objs(message, ' ', objv);
+            Tcl_EvalObjv(interp, objc, objv, 0);
+            for (int i = 0; i < objc; i++) Tcl_DecrRefCount(objv[i]);
 
-                Tcl_Obj* obj = Tcl_NewStringObj(first_word, -1);
-                Tcl_IncrRefCount(obj);
-                Tcl_Obj *objv[1024] = {obj};
-
-                while (true) {
-                    char *next = strtok(NULL, " ");
-                    if (next == NULL) {
-                        break;
-                    }
-                    obj = Tcl_NewStringObj(next, -1);
-                    Tcl_IncrRefCount(obj);
-                    objv[objc++] = obj;
+            Tcl_Obj *result = Tcl_GetObjResult(interp);
+            if (result->typePtr != NULL && strcmp(result->typePtr->name, "list") == 0) {
+                int objc;
+                Tcl_Obj **objv;
+                Tcl_ListObjGetElements(interp, result, &objc, &objv);
+                for (int i = 0; i < objc; i++) {
+                    send_message(write_stream, Tcl_GetString(objv[i]));
                 }
-                Tcl_EvalObjv(interp, objc, objv, 0);
-
-                Tcl_Obj *result = Tcl_GetObjResult(interp);
-                if (result->typePtr != NULL && strcmp(result->typePtr->name, "list") == 0) {
-                    int objc;
-                    Tcl_Obj **objv;
-                    Tcl_ListObjGetElements(interp, result, &objc, &objv);
-                    for (int i = 0; i < objc; i++) {
-                        send_message(write_stream, Tcl_GetString(objv[i]));
-                    }
-                } else {
-                    send_message(write_stream, (char *) Tcl_GetStringResult(interp));
-                }
+            } else {
+                send_message(write_stream, (char *) Tcl_GetStringResult(interp));
             }
         }
     }
