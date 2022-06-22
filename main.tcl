@@ -1,9 +1,10 @@
 proc !help {} {
-    return "Bot commands: !project !discord !pair. Let me know if you have any coding questions, or just want me to look at something on-stream."
+    list "Bot commands: !project !discord !pair" \
+         "Let me know if you have any coding questions, or just want me to look at something on-stream."
 }
 
 proc !pair {} {
-  return "Let's pair together on-stream! I can work together over the following platforms: Discord, VS Code Live Share, JetBrains Code With Me, Replit" 
+    return "Let's pair together on-stream! I can work together over the following platforms: Discord, VS Code Live Share, JetBrains Code With Me, Replit"
 }
 
 proc !project {} {

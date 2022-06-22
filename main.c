@@ -118,6 +118,8 @@ int main(void) {
         if (scanned == 2) {
             char *first_word = strtok(message, " ");
             if (first_word[0] == '!' && first_word[1] != 0) {
+                printf(">>> %s\n", first_word);
+
                 // if we detect a message that starts with !, we're going to try and call a Tcl
                 // command with that corresponding name. for example, if someone types !project,
                 int objc = 1;
@@ -137,10 +139,17 @@ int main(void) {
                 }
                 Tcl_EvalObjv(interp, objc, objv, 0);
 
-                for (int i = 0; i < objc; i++) Tcl_DecrRefCount(objv[i]);
-
-                printf(">>> %s\n", first_word);
-                send_message(write_stream, (char *) Tcl_GetStringResult(interp));
+                Tcl_Obj *result = Tcl_GetObjResult(interp);
+                if (result->typePtr != NULL && strcmp(result->typePtr->name, "list") == 0) {
+                    int objc;
+                    Tcl_Obj **objv;
+                    Tcl_ListObjGetElements(interp, result, &objc, &objv);
+                    for (int i = 0; i < objc; i++) {
+                        send_message(write_stream, Tcl_GetString(objv[i]));
+                    }
+                } else {
+                    send_message(write_stream, (char *) Tcl_GetStringResult(interp));
+                }
             }
         }
     }
